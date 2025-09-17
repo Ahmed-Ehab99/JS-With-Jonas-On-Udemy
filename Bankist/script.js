@@ -1,11 +1,49 @@
 "use strict";
 
-// Data
+/**
+ * BANKIST APP - Enhanced Version
+ * A modern banking application simulation
+ * Built with vanilla JavaScript, HTML, and CSS
+ *
+ * Features:
+ * - User authentication
+ * - Account balance display
+ * - Transaction history
+ * - Money transfers
+ * - Loan requests
+ * - Account closure
+ * - Auto-logout timer
+ * - Internationalization support
+ *
+ * Author: Your Name
+ * Course: JavaScript Complete Course by Jonas Schmedtmann
+ */
+
+// ==========================================
+// APPLICATION DATA
+// ==========================================
+
+/**
+ * Sample user accounts with transaction data
+ * Each account contains: owner info, movements, dates, settings
+ */
 const account1 = {
   owner: "Jonas Schmedtmann",
-  movements: [200, 450, -400, 3000, -650, -130, 70, 1300],
-  interestRate: 1.2, // %
+  movements: [200, 455.23, -306.5, 25000, -642.21, -133.9, 79.97, 1300],
+  interestRate: 1.2, // Interest rate percentage
   pin: 1111,
+  movementsDates: [
+    "2019-11-18T21:31:17.178Z",
+    "2019-12-23T07:42:02.383Z",
+    "2020-01-28T09:15:04.904Z",
+    "2020-04-01T10:17:24.185Z",
+    "2020-05-08T14:11:59.604Z",
+    "2020-05-27T17:01:17.194Z",
+    "2025-09-11T23:36:17.929Z",
+    "2025-09-17T10:51:36.790Z",
+  ],
+  currency: "EUR",
+  locale: "pt-PT",
 };
 
 const account2 = {
@@ -13,25 +51,28 @@ const account2 = {
   movements: [5000, 3400, -150, -790, -3210, -1000, 8500, -30],
   interestRate: 1.5,
   pin: 2222,
+  movementsDates: [
+    "2019-11-01T13:15:33.035Z",
+    "2019-11-30T09:48:16.867Z",
+    "2019-12-25T06:04:23.907Z",
+    "2020-01-25T14:18:46.235Z",
+    "2020-02-05T16:33:06.386Z",
+    "2020-04-10T14:43:26.374Z",
+    "2020-06-25T18:49:59.371Z",
+    "2020-07-26T12:01:20.894Z",
+  ],
+  currency: "USD",
+  locale: "en-US",
 };
 
-const account3 = {
-  owner: "Steven Thomas Williams",
-  movements: [200, -200, 340, -300, -20, 50, 400, -460],
-  interestRate: 0.7,
-  pin: 3333,
-};
+// Array containing all user accounts
+const accounts = [account1, account2];
 
-const account4 = {
-  owner: "Sarah Smith",
-  movements: [430, 1000, 700, 50, 90],
-  interestRate: 1,
-  pin: 4444,
-};
+// ==========================================
+// DOM ELEMENT REFERENCES
+// ==========================================
 
-const accounts = [account1, account2, account3, account4];
-
-// Elements
+// UI Labels
 const labelWelcome = document.querySelector(".welcome");
 const labelDate = document.querySelector(".date");
 const labelBalance = document.querySelector(".balance__value");
@@ -40,15 +81,18 @@ const labelSumOut = document.querySelector(".summary__value--out");
 const labelSumInterest = document.querySelector(".summary__value--interest");
 const labelTimer = document.querySelector(".timer");
 
+// Containers
 const containerApp = document.querySelector(".app");
 const containerMovements = document.querySelector(".movements");
 
+// Buttons
 const btnLogin = document.querySelector(".login__btn");
 const btnTransfer = document.querySelector(".form__btn--transfer");
 const btnLoan = document.querySelector(".form__btn--loan");
 const btnClose = document.querySelector(".form__btn--close");
 const btnSort = document.querySelector(".btn--sort");
 
+// Input Fields
 const inputLoginUsername = document.querySelector(".login__input--user");
 const inputLoginPin = document.querySelector(".login__input--pin");
 const inputTransferTo = document.querySelector(".form__input--to");
@@ -57,6 +101,59 @@ const inputLoanAmount = document.querySelector(".form__input--loan-amount");
 const inputCloseUsername = document.querySelector(".form__input--user");
 const inputClosePin = document.querySelector(".form__input--pin");
 
+// ==========================================
+// APPLICATION STATE
+// ==========================================
+
+let currentAccount; // Currently logged-in account
+let timer; // Auto-logout timer reference
+let sorted = false; // Movement sorting state
+
+// ==========================================
+// UTILITY FUNCTIONS
+// ==========================================
+
+/**
+ * Formats transaction dates with relative time display
+ * @param {Date} date - The date to format
+ * @param {string} locale - User's locale for formatting
+ * @returns {string} Formatted date string
+ */
+const formatMovementDate = function (date, locale) {
+  // Calculate days passed since transaction
+  const calcDaysPassed = (date1, date2) =>
+    Math.round(Math.abs(date2 - date1) / (1000 * 60 * 60 * 24));
+
+  const daysPassed = calcDaysPassed(new Date(), date);
+
+  // Return relative time for recent transactions
+  if (daysPassed === 0) return "Today";
+  if (daysPassed === 1) return "Yesterday";
+  if (daysPassed <= 7) return `${daysPassed} days ago`;
+
+  // Return formatted date for older transactions
+  return new Intl.DateTimeFormat(locale).format(date);
+};
+
+/**
+ * Formats currency values according to user's locale
+ * @param {number} value - Amount to format
+ * @param {string} locale - User's locale
+ * @param {string} currency - Currency code (EUR, USD, etc.)
+ * @returns {string} Formatted currency string
+ */
+const formatCurrency = (value, locale, currency) => {
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: currency,
+  }).format(value);
+};
+
+/**
+ * Generates usernames from account owner names
+ * Creates username by taking first letter of each name part
+ * @param {Array} accounts - Array of account objects
+ */
 const createUserNames = (accounts) => {
   accounts.forEach((account) => {
     account.userName = account.owner
@@ -66,20 +163,46 @@ const createUserNames = (accounts) => {
       .join("");
   });
 };
-createUserNames(accounts);
 
-const displayMovements = (movements, sort = false) => {
+// ==========================================
+// UI UPDATE FUNCTIONS
+// ==========================================
+
+/**
+ * Displays account movements/transactions in the UI
+ * @param {Object} acc - Account object
+ * @param {boolean} sort - Whether to sort movements by amount
+ */
+const displayMovements = (acc, sort = false) => {
+  // Clear existing movements
   containerMovements.innerHTML = "";
 
-  const movs = sort ? movements.slice().sort((a, b) => a - b) : movements;
+  // Combine movements with their corresponding dates
+  const combinedMovsDates = acc.movements.map((mov, i) => ({
+    movement: mov,
+    movementDate: acc.movementsDates.at(i),
+  }));
 
-  movs.forEach((mov, i) => {
-    const type = mov > 0 ? "deposit" : "withdrawal";
+  // Sort movements by amount if requested
+  if (sort) {
+    combinedMovsDates.sort((a, b) => a.movement - b.movement);
+  }
+
+  // Create HTML for each movement
+  combinedMovsDates.forEach((obj, i) => {
+    const { movement, movementDate } = obj;
+    const type = movement > 0 ? "deposit" : "withdrawal";
+    const date = new Date(movementDate);
+    const displayDate = formatMovementDate(date, acc.locale);
+    const formattedMov = formatCurrency(movement, acc.locale, acc.currency);
 
     const html = `
       <div class="movements__row">
-        <div class="movements__type movements__type--${type}">${i} ${type}</div>
-        <div class="movements__value">${mov}€</div>
+        <div class="movements__type movements__type--${type}">${
+      i + 1
+    } ${type}</div>
+        <div class="movements__date">${displayDate}</div>
+        <div class="movements__value">${formattedMov}</div>
       </div>
     `;
 
@@ -87,66 +210,161 @@ const displayMovements = (movements, sort = false) => {
   });
 };
 
+/**
+ * Calculates and displays the total account balance
+ * @param {Object} acc - Account object
+ */
 const calcTotalBalance = (acc) => {
   acc.balance = acc.movements.reduce((acc, mov) => acc + mov, 0);
-
-  labelBalance.textContent = `${acc.balance}€`;
+  labelBalance.textContent = formatCurrency(
+    acc.balance,
+    acc.locale,
+    acc.currency
+  );
 };
 
+/**
+ * Calculates and displays account summary (income, outcome, interest)
+ * @param {Object} acc - Account object
+ */
 const calcSummary = (acc) => {
+  // Calculate total income (positive movements)
   const incomes = acc.movements
     .filter((mov) => mov > 0)
     .reduce((acc, mov) => acc + mov, 0);
-  labelSumIn.textContent = `${incomes}€`;
+  labelSumIn.textContent = formatCurrency(incomes, acc.locale, acc.currency);
 
+  // Calculate total outcome (negative movements)
   const outcomes = acc.movements
     .filter((mov) => mov < 0)
     .reduce((acc, mov) => acc + mov, 0);
-  labelSumOut.textContent = `${Math.abs(outcomes)}€`;
+  labelSumOut.textContent = formatCurrency(
+    Math.abs(outcomes),
+    acc.locale,
+    acc.currency
+  );
 
+  // Calculate interest earned on deposits
   const interest = acc.movements
     .filter((mov) => mov > 0)
     .map((deposit) => (deposit * acc.interestRate) / 100)
-    .filter((int) => int >= 1)
+    .filter((int) => int >= 1) // Only count interest >= 1
     .reduce((acc, int) => acc + int, 0);
-  labelSumInterest.textContent = `${interest}€`;
+  labelSumInterest.textContent = formatCurrency(
+    interest,
+    acc.locale,
+    acc.currency
+  );
 };
 
+/**
+ * Updates all UI components with current account data
+ * @param {Object} acc - Account object
+ */
 const updateUI = (acc) => {
-  // Display Movements
-  displayMovements(acc.movements);
-
-  // Display Balance
+  displayMovements(acc);
   calcTotalBalance(acc);
-
-  // Display Summary
   calcSummary(acc);
 };
 
-let currentAccount;
+// ==========================================
+// TIMER FUNCTIONALITY
+// ==========================================
+
+/**
+ * Starts the auto-logout timer
+ * Logs out user after 10 minutes of inactivity
+ * @returns {number} Timer reference for clearing
+ */
+const startLogoutTimer = () => {
+  let time = 600; // 10 minutes in seconds
+
+  const tick = () => {
+    const min = String(Math.trunc(time / 60)).padStart(2, "0");
+    const sec = String(time % 60).padStart(2, "0");
+
+    // Display remaining time
+    labelTimer.textContent = `${min}:${sec}`;
+
+    // When time expires, logout user
+    if (time === 0) {
+      clearInterval(timer);
+      labelWelcome.textContent = "Log in to get started";
+      containerApp.style.opacity = 0;
+      currentAccount = null;
+    }
+
+    time--;
+  };
+
+  tick(); // Call immediately
+  const timerRef = setInterval(tick, 1000);
+  return timerRef;
+};
+
+/**
+ * Resets the logout timer (called on user activity)
+ */
+const resetTimer = () => {
+  if (timer) clearInterval(timer);
+  timer = startLogoutTimer();
+};
+
+// ==========================================
+// EVENT HANDLERS
+// ==========================================
+
+/**
+ * Handles user login
+ */
 btnLogin.addEventListener("click", (e) => {
   e.preventDefault();
 
+  // Find account with matching username
   currentAccount = accounts.find(
     (acc) => acc.userName === inputLoginUsername.value
   );
 
+  // Validate PIN
   if (currentAccount?.pin === Number(inputLoginPin.value)) {
-    // Display UI and Message
+    // Display welcome message and UI
     labelWelcome.textContent = `Welcome back, ${
       currentAccount.owner.split(" ")[0]
     }`;
     containerApp.style.opacity = 1;
 
-    // Clear Input Fields
+    // Display current date and time
+    const now = new Date();
+    const options = {
+      day: "numeric",
+      month: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "numeric",
+    };
+    labelDate.textContent = new Intl.DateTimeFormat(
+      currentAccount.locale,
+      options
+    ).format(now);
+
+    // Clear input fields
     inputLoginUsername.value = inputLoginPin.value = "";
     inputLoginPin.blur();
 
-    // Update UI
+    // Start logout timer
+    resetTimer();
+
+    // Update UI with account data
     updateUI(currentAccount);
+  } else {
+    // Invalid credentials
+    alert("Invalid username or PIN");
   }
 });
 
+/**
+ * Handles money transfer between accounts
+ */
 btnTransfer.addEventListener("click", (e) => {
   e.preventDefault();
 
@@ -155,27 +373,102 @@ btnTransfer.addEventListener("click", (e) => {
     (acc) => acc.userName === inputTransferTo.value
   );
 
+  // Clear inputs
+  inputTransferAmount.value = inputTransferTo.value = "";
+
+  // Validate transfer
   if (
     amount > 0 &&
     receiverAcc &&
     currentAccount.balance >= amount &&
     receiverAcc?.userName !== currentAccount.userName
   ) {
-    // Doing the Transfer
+    // Execute transfer
     currentAccount.movements.push(-amount);
     receiverAcc.movements.push(amount);
 
-    // Update UI
-    updateUI(currentAccount);
-  }
+    // Add transaction dates
+    currentAccount.movementsDates.push(new Date().toISOString());
+    receiverAcc.movementsDates.push(new Date().toISOString());
 
-  // Clear Inputs
-  inputTransferAmount.value = inputTransferTo.value = "";
+    // Update UI and reset timer
+    updateUI(currentAccount);
+    resetTimer();
+
+    // Show success message
+    setTimeout(() => {
+      alert(
+        `Transfer of ${formatCurrency(
+          amount,
+          currentAccount.locale,
+          currentAccount.currency
+        )} completed successfully!`
+      );
+    }, 500);
+  } else {
+    // Invalid transfer
+    let errorMessage = "Transfer failed: ";
+    if (!amount || amount <= 0) errorMessage += "Invalid amount";
+    else if (!receiverAcc) errorMessage += "Recipient not found";
+    else if (currentAccount.balance < amount)
+      errorMessage += "Insufficient funds";
+    else if (receiverAcc.userName === currentAccount.userName)
+      errorMessage += "Cannot transfer to yourself";
+
+    alert(errorMessage);
+  }
 });
 
+/**
+ * Handles loan requests
+ */
+btnLoan.addEventListener("click", (e) => {
+  e.preventDefault();
+
+  const amount = Math.floor(inputLoanAmount.value);
+
+  // Loan approval: user must have a deposit >= 10% of loan amount
+  if (
+    amount > 0 &&
+    currentAccount.movements.some((mov) => mov >= amount * 0.1)
+  ) {
+    // Simulate loan processing delay
+    setTimeout(() => {
+      // Add loan to account
+      currentAccount.movements.push(amount);
+      currentAccount.movementsDates.push(new Date().toISOString());
+
+      // Update UI and reset timer
+      updateUI(currentAccount);
+      resetTimer();
+
+      alert(
+        `Loan of ${formatCurrency(
+          amount,
+          currentAccount.locale,
+          currentAccount.currency
+        )} approved and deposited!`
+      );
+    }, 2500);
+
+    alert("Loan request submitted. Processing...");
+  } else {
+    // Loan denied
+    alert(
+      "Loan denied. You need at least one deposit of 10% of the loan amount."
+    );
+  }
+
+  inputLoanAmount.value = "";
+});
+
+/**
+ * Handles account closure
+ */
 btnClose.addEventListener("click", (e) => {
   e.preventDefault();
 
+  // Verify credentials before closing account
   if (
     inputCloseUsername.value === currentAccount.userName &&
     Number(inputClosePin.value) === currentAccount.pin
@@ -184,42 +477,57 @@ btnClose.addEventListener("click", (e) => {
       (acc) => acc.userName === currentAccount.userName
     );
 
-    // Delete Account
+    // Remove account from array
     accounts.splice(index, 1);
 
-    // Hide UI
+    // Hide UI and show logout message
     containerApp.style.opacity = 0;
+    labelWelcome.textContent =
+      "Account closed successfully. Thank you for using Bankist!";
+
+    // Clear timer
+    if (timer) clearInterval(timer);
+    currentAccount = null;
+  } else {
+    alert("Invalid credentials. Account closure cancelled.");
   }
 
-  // Clear Inputs
+  // Clear inputs
   inputCloseUsername.value = inputClosePin.value = "";
-
-  // Update Message
-  labelWelcome.textContent = "Log in to get started";
 });
 
-btnLoan.addEventListener("click", (e) => {
-  e.preventDefault();
-
-  const amount = Number(inputLoanAmount.value);
-
-  if (
-    amount > 0 &&
-    currentAccount.movements.some((mov) => mov >= amount * 0.1)
-  ) {
-    // Add Movement
-    currentAccount.movements.push(amount);
-
-    // Update UI
-    updateUI(currentAccount);
-  }
-  inputLoanAmount.value = "";
-});
-
-let sorted = false;
+/**
+ * Handles movement sorting toggle
+ */
 btnSort.addEventListener("click", (e) => {
   e.preventDefault();
-
-  displayMovements(currentAccount.movements, !sorted);
+  displayMovements(currentAccount, !sorted);
   sorted = !sorted;
+
+  // Update button text to indicate current state
+  btnSort.textContent = sorted ? "↑ UNSORT" : "↓ SORT";
 });
+
+// ==========================================
+// APPLICATION INITIALIZATION
+// ==========================================
+
+/**
+ * Initialize the application
+ */
+const init = () => {
+  // Create usernames for all accounts
+  createUserNames(accounts);
+
+  // Reset UI to initial state
+  containerApp.style.opacity = 0;
+  labelWelcome.textContent = "Log in to get started";
+
+  console.log("Bankist App initialized successfully!");
+  console.log("Demo accounts:");
+  console.log("Username: js, PIN: 1111");
+  console.log("Username: jd, PIN: 2222");
+};
+
+// Start the application
+init();
