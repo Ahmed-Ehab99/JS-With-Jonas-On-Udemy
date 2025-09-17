@@ -75,5 +75,5 @@ Bankist/
 
 ## 👨‍🎓 Author
 
-Project developed by [Your Name] while learning JavaScript with Jonas Schmedtmann’s course
+Project developed by Ahmed Ehab while learning JavaScript with Jonas Schmedtmann’s course
 .
