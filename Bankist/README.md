@@ -54,14 +54,15 @@ To test the app, you can log in with:
 
 ## 📂 Project Structure 
 
+```
 Bankist/
-│── index.html # Main HTML file
-│── style.css # Styling
-│── script.js # App logic (JavaScript)
-│── logo.png # Logo image
-│── icon.png # Favicon
-│── README.md # Project documentation
-
+│── index.html   # Main HTML file
+│── style.css    # Styling
+│── script.js    # App logic (JavaScript)
+│── logo.png     # Logo image
+│── icon.png     # Favicon
+│── README.md    # Project documentation
+```
 ---
 
 ## 🎯 How to Run  
