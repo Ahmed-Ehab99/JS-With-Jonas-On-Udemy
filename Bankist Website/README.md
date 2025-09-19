@@ -67,7 +67,6 @@ Bankist Website/
    ```
 
 2. Open index.html in your browser.
-   ```
 
 ---
 
